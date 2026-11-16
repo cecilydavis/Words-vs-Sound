@@ -63,7 +63,6 @@ st.markdown("""
         padding-bottom: 1rem;
     }
 
-    /* original streamlit font for headings */
     h1, h2, h3 {
         color: #C34F85 !important;
         font-family: inherit !important;
@@ -75,7 +74,6 @@ st.markdown("""
         margin-bottom: 0.2rem !important;
     }
 
-    /* pink buttons */
     div.stButton > button[kind="primary"] {
         background-color: #E46A9D;
         color: white;
@@ -89,21 +87,18 @@ st.markdown("""
         color: white;
     }
 
-    /* dropdowns and inputs */
     div[data-baseweb="select"] > div {
         background-color: #FFFFFF;
         border-color: #F1B6CE;
         border-radius: 10px;
     }
 
-    /* expandable sections */
     div[data-testid="stExpander"] {
         background-color: #FFEAF2;
         border: 1px solid #F3BDD2;
         border-radius: 12px;
     }
 
-    /* model cards */
     .model-card {
         background-color: #FFFFFF;
         border: 1px solid #F3BDD2;
@@ -128,7 +123,6 @@ st.markdown("""
         margin-bottom: 18px;
     }
 
-    /* predicted activity labels */
     .activity-tag {
         display: inline-block;
         background-color: #FFDCEB;
@@ -140,7 +134,6 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* selected song banner */
     .song-banner {
         background-color: #FFE1ED;
         border-left: 4px solid #E46A9D;
@@ -175,7 +168,7 @@ def load_songs():
 
     df = pd.read_csv("data/spotify_dataset.csv")
 
-    # keep this consistent with my saved test indices
+    # keep the same row order used for my saved test indices
     df = df.drop_duplicates().reset_index(drop=True)
 
     test_indices = np.load(
@@ -397,7 +390,7 @@ def predict_model(model, features, thresholds):
     return probabilities, predictions
 
 
-# display each model in a card
+# display model results in a card
 def show_model_card(model_name, result):
 
     descriptions = {
@@ -428,7 +421,9 @@ def show_model_card(model_name, result):
     else:
 
         activity_html = (
-            "<p>No activities passed the prediction thresholds.</p>"
+            '<span style="color: #94677C;">'
+            'No activities passed the prediction thresholds.'
+            '</span>'
         )
 
     best_index = int(np.argmax(probabilities))
@@ -436,31 +431,21 @@ def show_model_card(model_name, result):
     best_activity = ACTIVITIES[best_index]
     best_score = probabilities[best_index]
 
+    # keep HTML on one line so streamlit doesn't show it as code
+    card_html = (
+        '<div class="model-card">'
+        f'<div class="model-title">{html.escape(model_name)}</div>'
+        f'<div class="model-description">{html.escape(descriptions[model_name])}</div>'
+        '<p><strong>Predicted activities</strong></p>'
+        f'<div>{activity_html}</div>'
+        '<p style="margin-top: 20px; font-size: 0.85rem;">'
+        f'Highest score: {html.escape(best_activity)} ({best_score:.1%})'
+        '</p>'
+        '</div>'
+    )
+
     st.markdown(
-        f"""
-        <div class="model-card">
-
-            <div class="model-title">
-                {html.escape(model_name)}
-            </div>
-
-            <div class="model-description">
-                {html.escape(descriptions[model_name])}
-            </div>
-
-            <p><strong>Predicted activities</strong></p>
-
-            <div>
-                {activity_html}
-            </div>
-
-            <p style="margin-top: 20px; font-size: 0.85rem;">
-                Highest score:
-                {html.escape(best_activity)} ({best_score:.1%})
-            </p>
-
-        </div>
-        """,
+        card_html,
         unsafe_allow_html=True
     )
 
@@ -580,20 +565,16 @@ if "results" in st.session_state:
     song_title = html.escape(song_info["title"])
     song_artist = html.escape(song_info["artist"])
 
+    # selected song banner
+    banner_html = (
+        '<div class="song-banner">'
+        f'<div class="song-title">{song_title}</div>'
+        f'<div class="song-artist">{song_artist}</div>'
+        '</div>'
+    )
+
     st.markdown(
-        f"""
-        <div class="song-banner">
-
-            <div class="song-title">
-                {song_title}
-            </div>
-
-            <div class="song-artist">
-                {song_artist}
-            </div>
-
-        </div>
-        """,
+        banner_html,
         unsafe_allow_html=True
     )
 
@@ -663,7 +644,7 @@ if "results" in st.session_state:
         "from the dataset."
     )
 
-    # extra information without extra scrolling
+    # extra details without taking up space
     with st.expander("Detailed Model Scores"):
 
         scores_df = pd.DataFrame({
