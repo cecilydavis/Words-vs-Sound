@@ -145,6 +145,33 @@ I saved the final results in:
 
 I also saved the trained models, so someone can use the app without having to train everything again.
 
+## Interactive Application
+
+I created a Streamlit application to make my machine learning models
+more interactive. Users can select a song from the held-out test dataset
+and compare predictions from all three models.
+
+The application includes:
+- Predictions from the Sound Only, Lyrics Only, and Combined models
+- Predicted listening activities for each model
+- A comparison of predictions against the actual dataset labels
+- Detailed prediction scores and overall model performance
+
+### Model Predictions
+
+![Model Predictions](images/model_predictions.png)
+
+The application displays predictions from all three models for
+"Hotline Bling Remix" by Drake.
+
+### Side-by-Side Comparison
+
+![Model Comparison](images/model_comparison.png)
+
+This example shows how the Sound Only and Combined models correctly
+identified both Party and Exercise, while the Lyrics Only model
+identified Exercise but missed Party.
+
 ## How to Run My App
 
 I made a Streamlit app so someone can actually try out my models.
