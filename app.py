@@ -4,21 +4,22 @@ import numpy as np
 import torch
 import torch.nn as nn
 import joblib
+import html
 
 from scipy.sparse import csr_matrix, hstack
 
-# ==================================================
-# SETTINGS
-# ==================================================
 
+# app settings
 torch.set_num_threads(1)
 
 st.set_page_config(
     page_title="Words vs. Sound",
-    page_icon="🎵",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
+
+# activities and features
 ACTIVITIES = [
     "Party",
     "Work/Study",
@@ -47,23 +48,140 @@ SOUND_FEATURES = [
 ]
 
 
-# ==================================================
-# LOAD SONGS
-# ==================================================
+# pink theme
+st.markdown("""
+<style>
 
+    .stApp {
+        background-color: #FFF5F9;
+        color: #503746;
+    }
+
+    .block-container {
+        max-width: 1250px;
+        padding-top: 1.4rem;
+        padding-bottom: 1rem;
+    }
+
+    /* original streamlit font for headings */
+    h1, h2, h3 {
+        color: #C34F85 !important;
+        font-family: inherit !important;
+        font-weight: 700 !important;
+    }
+
+    h1 {
+        font-size: 2.5rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    /* pink buttons */
+    div.stButton > button[kind="primary"] {
+        background-color: #E46A9D;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #C34F85;
+        color: white;
+    }
+
+    /* dropdowns and inputs */
+    div[data-baseweb="select"] > div {
+        background-color: #FFFFFF;
+        border-color: #F1B6CE;
+        border-radius: 10px;
+    }
+
+    /* expandable sections */
+    div[data-testid="stExpander"] {
+        background-color: #FFEAF2;
+        border: 1px solid #F3BDD2;
+        border-radius: 12px;
+    }
+
+    /* model cards */
+    .model-card {
+        background-color: #FFFFFF;
+        border: 1px solid #F3BDD2;
+        border-top: 5px solid #E46A9D;
+        border-radius: 14px;
+        padding: 20px;
+        min-height: 235px;
+        box-shadow: 0 3px 12px rgba(195, 79, 133, 0.08);
+    }
+
+    .model-title {
+        font-family: inherit;
+        font-size: 1.35rem;
+        color: #C34F85;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .model-description {
+        font-size: 0.88rem;
+        color: #94677C;
+        margin-bottom: 18px;
+    }
+
+    /* predicted activity labels */
+    .activity-tag {
+        display: inline-block;
+        background-color: #FFDCEB;
+        color: #A83F70;
+        padding: 6px 11px;
+        border-radius: 8px;
+        margin: 4px 4px 4px 0;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    /* selected song banner */
+    .song-banner {
+        background-color: #FFE1ED;
+        border-left: 4px solid #E46A9D;
+        padding: 15px 20px;
+        border-radius: 12px;
+        margin: 15px 0;
+    }
+
+    .song-title {
+        font-family: inherit;
+        color: #B84478;
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+
+    .song-artist {
+        color: #94677C;
+        margin-top: 4px;
+    }
+
+    hr {
+        border-color: #F3BDD2 !important;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# load songs from my test dataset
 @st.cache_data
 def load_songs():
 
     df = pd.read_csv("data/spotify_dataset.csv")
 
-    # Use the exact same cleaning as training
+    # keep this consistent with my saved test indices
     df = df.drop_duplicates().reset_index(drop=True)
 
     test_indices = np.load(
         "models/test_indices_grouped.npy"
     )
 
-    # Only use songs the models were not trained on
     test_songs = df.iloc[test_indices].copy()
 
     test_songs["display_name"] = (
@@ -75,10 +193,7 @@ def load_songs():
     return test_songs
 
 
-# ==================================================
-# MODEL ARCHITECTURES
-# ==================================================
-
+# sound model
 class SoundModel(nn.Module):
 
     def __init__(self):
@@ -96,6 +211,7 @@ class SoundModel(nn.Module):
         return self.network(x)
 
 
+# lyrics model
 class LyricsModel(nn.Module):
 
     def __init__(self):
@@ -113,6 +229,7 @@ class LyricsModel(nn.Module):
         return self.network(x)
 
 
+# combined model
 class CombinedModel(nn.Module):
 
     def __init__(self):
@@ -130,10 +247,7 @@ class CombinedModel(nn.Module):
         return self.network(x)
 
 
-# ==================================================
-# LOAD ALL THREE MODELS
-# ==================================================
-
+# load saved models
 @st.cache_resource
 def load_models():
 
@@ -205,13 +319,10 @@ def load_models():
     }, scaler, vectorizer
 
 
-# ==================================================
-# PREPARE SONG FEATURES
-# ==================================================
-
+# prepare song features
 def prepare_features(song, scaler, vectorizer):
 
-    # Sound features
+    # sound features
     sound_values = song[SOUND_FEATURES].copy()
 
     sound_values["Loudness (db)"] = str(
@@ -237,7 +348,7 @@ def prepare_features(song, scaler, vectorizer):
         sound_df
     ).astype(np.float32)
 
-    # Lyrics features
+    # lyrics features
     lyrics = song["text"]
 
     if pd.isna(lyrics):
@@ -247,7 +358,7 @@ def prepare_features(song, scaler, vectorizer):
         [str(lyrics)]
     )
 
-    # Combined features: sound first, then lyrics
+    # combine sound and lyrics
     combined_features = hstack(
         [
             csr_matrix(sound_scaled),
@@ -263,13 +374,9 @@ def prepare_features(song, scaler, vectorizer):
     }
 
 
-# ==================================================
-# MAKE MODEL PREDICTIONS
-# ==================================================
-
+# make predictions
 def predict_model(model, features, thresholds):
 
-    # Convert sparse features to a dense array
     if hasattr(features, "toarray"):
         features = features.toarray()
 
@@ -290,282 +397,299 @@ def predict_model(model, features, thresholds):
     return probabilities, predictions
 
 
-# ==================================================
-# WEBSITE HEADER
-# ==================================================
+# display each model in a card
+def show_model_card(model_name, result):
 
-st.title("🎵 Words vs. Sound")
+    descriptions = {
+        "Sound Only": "Using the song's audio characteristics",
+        "Lyrics Only": "Using the words in the song",
+        "Words + Sound": "Using both lyrics and sound features"
+    }
 
-st.subheader("Song Activity Prediction Dashboard")
+    predictions = result["predictions"]
+    probabilities = result["probabilities"]
 
-st.write(
-    "Can a song's lyrics, sound features, or both "
-    "better predict which activities it's suited for?"
-)
+    predicted_activities = [
+        activity
+        for activity, predicted in zip(
+            ACTIVITIES,
+            predictions
+        )
+        if predicted
+    ]
 
-st.info(
-    "Explore how three trained neural networks classify "
-    "songs for different activities."
-)
+    if predicted_activities:
 
-st.divider()
-
-
-# ==================================================
-# SONG SELECTION
-# ==================================================
-
-songs = load_songs()
-
-st.header("1. Choose a Song")
-
-selected_index = st.selectbox(
-    "Search for a song by title or artist:",
-    options=songs.index.tolist(),
-    format_func=lambda index: songs.loc[
-        index, "display_name"
-    ],
-    index=None,
-    placeholder="Type a song title or artist..."
-)
-
-st.caption(
-    f"Search through {len(songs):,} songs "
-    "from the held-out testing dataset."
-)
-
-st.divider()
-
-
-# ==================================================
-# MODEL SELECTION
-# ==================================================
-
-st.header("2. Choose a Model")
-
-model_choice = st.radio(
-    "Select the model you want to explore:",
-    [
-        "Sound Only",
-        "Lyrics Only",
-        "Words + Sound",
-        "Compare All Models"
-    ],
-    horizontal=True
-)
-
-st.divider()
-
-
-# ==================================================
-# PREDICTION BUTTON
-# ==================================================
-
-st.header("3. Generate Predictions")
-
-if st.button(
-    "Predict Activities",
-    type="primary"
-):
-
-    if selected_index is None:
-
-        st.warning(
-            "Please select a song before predicting."
+        activity_html = "".join(
+            f'<span class="activity-tag">{html.escape(activity)}</span>'
+            for activity in predicted_activities
         )
 
     else:
 
-        selected_song = songs.loc[selected_index]
-
-        st.success(
-            "Predictions generated successfully!"
+        activity_html = (
+            "<p>No activities passed the prediction thresholds.</p>"
         )
 
-        st.subheader(
-            f"🎶 {selected_song['song']}"
+    best_index = int(np.argmax(probabilities))
+
+    best_activity = ACTIVITIES[best_index]
+    best_score = probabilities[best_index]
+
+    st.markdown(
+        f"""
+        <div class="model-card">
+
+            <div class="model-title">
+                {html.escape(model_name)}
+            </div>
+
+            <div class="model-description">
+                {html.escape(descriptions[model_name])}
+            </div>
+
+            <p><strong>Predicted activities</strong></p>
+
+            <div>
+                {activity_html}
+            </div>
+
+            <p style="margin-top: 20px; font-size: 0.85rem;">
+                Highest score:
+                {html.escape(best_activity)} ({best_score:.1%})
+            </p>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# app title
+st.title("Words vs. Sound")
+
+st.markdown(
+    "**Does the music or the message matter more?**"
+)
+
+st.caption(
+    "A machine learning project comparing how lyrics and sound "
+    "features predict suitable listening activities."
+)
+
+st.divider()
+
+
+# choose a song
+songs = load_songs()
+
+left, right = st.columns(
+    [3, 1],
+    vertical_alignment="bottom"
+)
+
+with left:
+
+    selected_index = st.selectbox(
+        "Pick a song",
+        options=songs.index.tolist(),
+        format_func=lambda index: songs.loc[
+            index, "display_name"
+        ],
+        index=None,
+        placeholder="Search by song title or artist..."
+    )
+
+with right:
+
+    predict_clicked = st.button(
+        "Compare Models",
+        type="primary",
+        use_container_width=True
+    )
+
+st.caption(
+    f"Choose from {len(songs):,} songs "
+    "in the held-out test dataset."
+)
+
+
+# run all three models
+if predict_clicked:
+
+    if selected_index is None:
+
+        st.warning(
+            "Please select a song first."
         )
 
-        st.write(
-            "**Artist:**",
-            selected_song["Artist(s)"]
-        )
+    else:
 
-        # Load models and prepare features
-        models, scaler, vectorizer = load_models()
+        with st.spinner("Generating predictions..."):
 
-        features = prepare_features(
-            selected_song,
-            scaler,
-            vectorizer
-        )
+            selected_song = songs.loc[selected_index]
 
-        # Get actual labels from the dataset
-        actual_labels = selected_song[
-            LABEL_COLUMNS
-        ].to_numpy(dtype=int)
+            models, scaler, vectorizer = load_models()
 
-        # Determine which models to run
-        if model_choice == "Compare All Models":
+            features = prepare_features(
+                selected_song,
+                scaler,
+                vectorizer
+            )
 
-            selected_models = [
+            actual_labels = selected_song[
+                LABEL_COLUMNS
+            ].to_numpy(dtype=int)
+
+            all_results = {}
+
+            for model_name in [
                 "Sound Only",
                 "Lyrics Only",
                 "Words + Sound"
-            ]
+            ]:
 
-        else:
+                model, thresholds = models[model_name]
 
-            selected_models = [model_choice]
-
-        all_results = {}
-
-        # Generate predictions
-        for model_name in selected_models:
-
-            model, thresholds = models[model_name]
-
-            probabilities, predictions = predict_model(
-                model,
-                features[model_name],
-                thresholds
-            )
-
-            all_results[model_name] = {
-                "probabilities": probabilities,
-                "predictions": predictions
-            }
-
-        # ==================================================
-        # DISPLAY EACH MODEL'S RESULTS
-        # ==================================================
-
-        st.header("Prediction Results")
-
-        for model_name, result in all_results.items():
-
-            st.subheader(model_name)
-
-            probabilities = result["probabilities"]
-            predictions = result["predictions"]
-
-            results_df = pd.DataFrame({
-                "Activity": ACTIVITIES,
-                "Prediction": [
-                    "Yes" if value else "No"
-                    for value in predictions
-                ],
-                "Model Score": [
-                    f"{value:.1%}"
-                    for value in probabilities
-                ],
-                "Dataset Label": [
-                    "Yes" if value else "No"
-                    for value in actual_labels
-                ],
-                "Correct?": [
-                    "Yes" if prediction == actual else "No"
-                    for prediction, actual in zip(
-                        predictions,
-                        actual_labels
-                    )
-                ]
-            })
-
-            st.dataframe(
-                results_df,
-                hide_index=True,
-                use_container_width=True
-            )
-
-            # ==================================================
-            # BEST MATCH
-            # ==================================================
-
-            best_index = np.argmax(
-                probabilities
-            )
-
-            best_activity = ACTIVITIES[
-                best_index
-            ]
-
-            best_score = probabilities[
-                best_index
-            ]
-
-            st.write(
-                f"**Highest-scoring activity:** "
-                f"{best_activity} ({best_score:.1%})"
-            )
-
-            if not predictions.any():
-
-                st.caption(
-                    "None of the five activities exceeded "
-                    "this model's saved prediction thresholds."
+                probabilities, predictions = predict_model(
+                    model,
+                    features[model_name],
+                    thresholds
                 )
 
-            # ==================================================
-            # BAR CHART
-            # ==================================================
+                all_results[model_name] = {
+                    "probabilities": probabilities,
+                    "predictions": predictions
+                }
 
-            chart_df = pd.DataFrame({
-                "Activity": ACTIVITIES,
-                "Model Score": probabilities
-            })
+            st.session_state["results"] = all_results
 
-            st.bar_chart(
-                chart_df.set_index("Activity")
-            )
+            st.session_state["song"] = {
+                "title": str(selected_song["song"]),
+                "artist": str(selected_song["Artist(s)"]),
+                "actual_labels": actual_labels
+            }
 
-            st.divider()
 
-        # ==================================================
-        # COMPARE ALL THREE MODELS
-        # ==================================================
+# display predictions
+if "results" in st.session_state:
 
-        if model_choice == "Compare All Models":
+    results = st.session_state["results"]
+    song_info = st.session_state["song"]
 
-            st.header("Model Comparison")
+    song_title = html.escape(song_info["title"])
+    song_artist = html.escape(song_info["artist"])
 
-            comparison_df = pd.DataFrame({
-                "Activity": ACTIVITIES,
-                "Dataset Label": [
-                    "Yes" if value else "No"
-                    for value in actual_labels
-                ]
-            })
+    st.markdown(
+        f"""
+        <div class="song-banner">
 
-            for model_name, result in all_results.items():
+            <div class="song-title">
+                {song_title}
+            </div>
 
-                comparison_df[model_name] = [
-                    "Yes" if value else "No"
-                    for value in result["predictions"]
-                ]
+            <div class="song-artist">
+                {song_artist}
+            </div>
 
-            st.dataframe(
-                comparison_df,
-                hide_index=True,
-                use_container_width=True
-            )
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-            st.subheader(
-                "Model Scores Compared"
-            )
+    st.subheader("What do the models think?")
 
-            scores_df = pd.DataFrame({
-                model_name: result["probabilities"]
-                for model_name, result in all_results.items()
-            }, index=ACTIVITIES)
+    # three model cards side by side
+    col1, col2, col3 = st.columns(
+        3,
+        gap="medium"
+    )
 
-            st.bar_chart(scores_df)
+    with col1:
 
-        # ==================================================
-        # SHOW FINAL TESTING RESULTS
-        # ==================================================
+        show_model_card(
+            "Sound Only",
+            results["Sound Only"]
+        )
 
-        st.header("Overall Model Performance")
+    with col2:
+
+        show_model_card(
+            "Lyrics Only",
+            results["Lyrics Only"]
+        )
+
+    with col3:
+
+        show_model_card(
+            "Words + Sound",
+            results["Words + Sound"]
+        )
+
+    st.subheader("Side-by-Side Comparison")
+
+    comparison_df = pd.DataFrame({
+        "Activity": ACTIVITIES,
+
+        "Actual Label": [
+            "Yes" if value else "No"
+            for value in song_info["actual_labels"]
+        ],
+
+        "Sound": [
+            "Yes" if value else "No"
+            for value in results["Sound Only"]["predictions"]
+        ],
+
+        "Lyrics": [
+            "Yes" if value else "No"
+            for value in results["Lyrics Only"]["predictions"]
+        ],
+
+        "Combined": [
+            "Yes" if value else "No"
+            for value in results["Words + Sound"]["predictions"]
+        ]
+    })
+
+    st.dataframe(
+        comparison_df,
+        hide_index=True,
+        use_container_width=True
+    )
+
+    st.caption(
+        "Actual Label shows the original activity labels "
+        "from the dataset."
+    )
+
+    # extra information without extra scrolling
+    with st.expander("Detailed Model Scores"):
+
+        scores_df = pd.DataFrame({
+            "Activity": ACTIVITIES,
+            "Sound": results["Sound Only"]["probabilities"],
+            "Lyrics": results["Lyrics Only"]["probabilities"],
+            "Combined": results["Words + Sound"]["probabilities"]
+        })
+
+        st.dataframe(
+            scores_df.style.format({
+                "Sound": "{:.1%}",
+                "Lyrics": "{:.1%}",
+                "Combined": "{:.1%}"
+            }),
+            hide_index=True,
+            use_container_width=True
+        )
+
+        st.caption(
+            "These are the models' output scores. "
+            "Each model uses its saved prediction thresholds "
+            "to decide which activities to predict."
+        )
+
+    with st.expander("Overall Model Performance"):
 
         final_results = pd.read_csv(
             "models/final_model_comparison.csv"
@@ -578,18 +702,14 @@ if st.button(
         )
 
         st.caption(
-            "These performance scores were calculated "
-            "using the full held-out testing dataset, "
-            "not just the selected song."
+            "These scores were calculated using the full "
+            "held-out testing dataset, not just this song."
         )
 
 
-# ==================================================
-# FOOTER
-# ==================================================
-
+# footer
 st.divider()
 
 st.caption(
-    "Words vs. Sound | Machine Learning Project"
+    "Words vs. Sound | CIS 377 | Cecily Davis"
 )
